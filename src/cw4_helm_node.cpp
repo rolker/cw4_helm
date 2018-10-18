@@ -60,7 +60,7 @@ MutexProtectedBagWriter log_bag;
 
 void twistCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
 {
-    throttle = msg->twist.linear.x;
+    throttle = msg->twist.linear.x/2.75;
     rudder = -msg->twist.angular.z;
     
     last_time = msg->header.stamp;
