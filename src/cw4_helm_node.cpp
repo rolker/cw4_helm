@@ -38,6 +38,7 @@ double heading;
 double rudder;
 double throttle;
 ros::Time last_time;
+bool joystick_override = false;
 
 double last_boat_heading;
 
@@ -152,10 +153,12 @@ void sendHeadingHold(const ros::TimerEvent event)
     asvMsg.heading.heading = heading;
     if(doDesired)
     {
+        joystick_override = false;
         asvMsg.thrust.type = asv_msgs::Thrust::THRUST_SPEED;
     }
     else
     {
+        joystick_override = true;
         asvMsg.thrust.type = asv_msgs::Thrust::THRUST_THROTTLE;
     }
     //asvMsg.thrust.type = asv_msgs::Thrust::THRUST_SPEED;
@@ -257,6 +260,10 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
     
     kv.key = "helm_mode";
     kv.value = helm_mode;
+    hb.values.push_back(kv);
+
+    kv.key = "js_override";
+    kv.value = boolToString(joystick_override);
     hb.values.push_back(kv);
     
     kv.key = "moos_wpt_index";
