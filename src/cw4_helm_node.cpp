@@ -19,6 +19,7 @@
 #include "marine_msgs/NavEulerStamped.h"
 #include "marine_msgs/Heartbeat.h"
 #include "marine_msgs/Contact.h"
+#include "marine_msgs/Helm.h"
 #include "project11/mutex_protected_bag_writer.h"
 #include <regex>
 #include "boost/date_time/posix_time/posix_time.hpp"
@@ -50,10 +51,8 @@ ros::Time desired_heading_time;
 float obstacle_distance;
 float speed_modulation;
 
-
-bool active;
 std::string helm_mode;
-int moos_wpt_index = -1;
+int current_line = -1;
 
 
 MutexProtectedBagWriter log_bag;
@@ -66,6 +65,15 @@ void twistCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
     
     last_time = msg->header.stamp;
 }
+
+void helmCallback(const marine_msgs::Helm::ConstPtr& msg)
+{
+    throttle = msg->throttle;
+    rudder = msg->rudder;
+    
+    last_time = msg->header.stamp;
+}
+
 
 void positionCallback(const asv_msgs::BasicPositionStamped::ConstPtr& inmsg)
 {
@@ -180,10 +188,9 @@ void sendHeadingHold(const ros::TimerEvent event)
         log_bag.write("/control/drive/heading_hold",ros::Time::now(),asvMsg);
 }
 
-void activeCallback(const std_msgs::Bool::ConstPtr& inmsg)
+void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
 {
-    active = inmsg->data;
-    if(inmsg->data)
+    if (helm_mode == "standby" && inmsg->data != "standby")
     {
         asv_srvs::VehicleState vs;
         vs.request.desired_state = asv_srvs::VehicleStateRequest::VP_STATE_ACTIVE;
@@ -197,22 +204,19 @@ void activeCallback(const std_msgs::Bool::ConstPtr& inmsg)
         inhibit.data = false;
         asv_inhibit_pub.publish(inhibit);
     }
-    else
+    if (inmsg->data == "standby")
     {
         asv_srvs::PilotControl pc;
         pc.request.control_request = false;
         ros::service::call("/control/vehicle/pilot",pc);
     }
-}
-
-void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
-{
+        
     helm_mode = inmsg->data;
 }
 
-void moosWptIndexCallback(const std_msgs::Int32::ConstPtr& inmsg)
+void currentLineCallback(const std_msgs::Int32::ConstPtr& inmsg)
 {
-    moos_wpt_index = inmsg->data;
+    current_line = inmsg->data;
 }
 
 std::string boolToString(bool value)
@@ -254,10 +258,6 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
 
     marine_msgs::KeyValue kv;
 
-    kv.key = "active";
-    kv.value = boolToString(active);
-    hb.values.push_back(kv);
-    
     kv.key = "helm_mode";
     kv.value = helm_mode;
     hb.values.push_back(kv);
@@ -266,9 +266,9 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
     kv.value = boolToString(joystick_override);
     hb.values.push_back(kv);
     
-    kv.key = "moos_wpt_index";
+    kv.key = "current_line";
     std::stringstream ss;
-    ss << moos_wpt_index;
+    ss << current_line;
     kv.value = ss.str();
     hb.values.push_back(kv);
 
@@ -382,15 +382,15 @@ int main(int argc, char **argv)
     ros::Subscriber asv_helm_sub = n.subscribe("/cmd_vel",5,twistCallback);
     ros::Subscriber asv_position_sub = n.subscribe("/sensor/vehicle/position",10,positionCallback);
     ros::Subscriber asv_heading_sub = n.subscribe("/sensor/vehicle/heading",5,headingCallback);
-    ros::Subscriber activesub = n.subscribe("/active",10,activeCallback);
     ros::Subscriber helm_mode_sub = n.subscribe("/helm_mode",10,helmModeCallback);
     ros::Subscriber dspeed_sub = n.subscribe("/project11/desired_speed",10,desiredSpeedCallback);
     ros::Subscriber dheading_sub = n.subscribe("/project11/desired_heading",10,desiredHeadingCallback);
     ros::Subscriber obstacle_distance_sub =  n.subscribe("/obstacle_distance",10,obstacleDistanceCallback);
     ros::Subscriber vehicle_state_sub =  n.subscribe("/vehicle_status",10,vehicleSatusCallback);
-    ros::Subscriber moos_wpt_index_sub = n.subscribe("/moos/wpt_index",10,moosWptIndexCallback);
+    ros::Subscriber current_line_sub = n.subscribe("/project11/mission_manager/current_line",10,currentLineCallback);
     ros::Subscriber ais_contact_sub = n.subscribe("/sensor/ais/contact",10,aisContactCallback);
-    
+    ros::Subscriber helm_sub = n.subscribe("/helm",10,helmCallback);
+
     ros::Timer timer = n.createTimer(ros::Duration(0.1),sendHeadingHold);
     
     ros::spin();
