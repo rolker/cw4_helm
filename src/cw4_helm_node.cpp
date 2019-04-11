@@ -206,9 +206,13 @@ void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
     }
     if (inmsg->data == "standby")
     {
-        asv_srvs::PilotControl pc;
-        pc.request.control_request = false;
-        ros::service::call("/control/vehicle/pilot",pc);
+        //asv_srvs::PilotControl pc;
+        //pc.request.control_request = false;
+        //ros::service::call("/control/vehicle/pilot",pc);
+
+        std_msgs::Bool inhibit;
+        inhibit.data = true;
+        asv_inhibit_pub.publish(inhibit);
     }
         
     helm_mode = inmsg->data;
@@ -340,6 +344,9 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
         case asv_msgs::VehicleStatus::PILOT_TRACK_FOLLOW:
             kv.value = "track follow";
             break;
+        case asv_msgs::VehicleStatus::PILOT_VIRTUAL_DRIVE:
+            kv.value = "virtual drive";
+            break;
         default:
             kv.value = "unknown";
     }
@@ -360,6 +367,7 @@ int main(int argc, char **argv)
     last_boat_heading = 0.0;
     obstacle_distance = -1.0;
     speed_modulation = 1.0;
+    helm_mode = "standby";
     
     ros::init(argc, argv, "cw4_helm");
     ros::NodeHandle n;
