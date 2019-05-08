@@ -20,7 +20,6 @@
 #include "marine_msgs/Heartbeat.h"
 #include "marine_msgs/Contact.h"
 #include "marine_msgs/Helm.h"
-#include "project11/mutex_protected_bag_writer.h"
 #include <regex>
 #include "boost/date_time/posix_time/posix_time.hpp"
 #include "std_msgs/Int32.h"
@@ -55,9 +54,6 @@ std::string helm_mode;
 int current_line = -1;
 
 
-MutexProtectedBagWriter log_bag;
-
-
 void twistCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
 {
     throttle = msg->twist.linear.x/2.75;
@@ -82,16 +78,11 @@ void positionCallback(const asv_msgs::BasicPositionStamped::ConstPtr& inmsg)
     gps.position.latitude = inmsg->basic_position.position.latitude;
     gps.position.longitude = inmsg->basic_position.position.longitude;
     position_pub.publish(gps);
-    if(ros::Time::now() > ros::TIME_MIN)
-        log_bag.write("/position",ros::Time::now(),gps);
     
     geometry_msgs::TwistStamped ts;
     ts.header = inmsg->header;
     ts.twist.linear.x = inmsg->basic_position.sog;
     speed_pub.publish(ts);
-    if(ros::Time::now() > ros::TIME_MIN)
-        log_bag.write("/sog",ros::Time::now(),ts);
-
 }
 
 void headingCallback(const asv_msgs::HeadingStamped::ConstPtr& msg)
@@ -101,8 +92,6 @@ void headingCallback(const asv_msgs::HeadingStamped::ConstPtr& msg)
     nes.header = msg->header;
     nes.orientation.heading = msg->heading.heading*180.0/M_PI;
     heading_pub.publish(nes);
-    if(ros::Time::now() > ros::TIME_MIN)
-        log_bag.write("/heading",ros::Time::now(),nes);
 }
 
 void obstacleDistanceCallback(const std_msgs::Float32::ConstPtr& inmsg)
@@ -120,9 +109,6 @@ void obstacleDistanceCallback(const std_msgs::Float32::ConstPtr& inmsg)
     std_msgs::Float32 sm;
     sm.data = speed_modulation;
     speed_modulation_pub.publish(sm);
-    if(ros::Time::now() > ros::TIME_MIN)
-        log_bag.write("/speed_modulation",ros::Time::now(),sm);
-
 }
 
 void desiredSpeedCallback(const geometry_msgs::TwistStamped::ConstPtr& inmsg)
@@ -184,8 +170,6 @@ void sendHeadingHold(const ros::TimerEvent event)
           //  std::cerr << "asv_helm: desired values timeout: " << event.current_real << ", " << desired_heading_time << ", " << desired_speed_time << std::endl;
     }
     asv_helm_pub.publish(asvMsg);
-    if(ros::Time::now() > ros::TIME_MIN)
-        log_bag.write("/control/drive/heading_hold",ros::Time::now(),asvMsg);
 }
 
 void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
@@ -353,8 +337,6 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
     hb.values.push_back(kv);
     
     heartbeat_pub.publish(hb);
-    if(ros::Time::now() > ros::TIME_MIN)
-        log_bag.write("/heartbeat",ros::Time::now(),hb);
 }
 
 
@@ -371,12 +353,6 @@ int main(int argc, char **argv)
     
     ros::init(argc, argv, "cw4_helm");
     ros::NodeHandle n;
-
-    boost::posix_time::ptime now = ros::WallTime::now().toBoost();
-    std::string iso_now = std::regex_replace(boost::posix_time::to_iso_extended_string(now),std::regex(":"),"-");
-    std::string log_filename = "nodes/cw4_helm-"+iso_now+".bag";
-    log_bag.open(log_filename, rosbag::bagmode::Write);
-
     
     asv_helm_pub = n.advertise<asv_msgs::HeadingHold>("/control/drive/heading_hold",1);
     asv_inhibit_pub = n.advertise<std_msgs::Bool>("/control/drive/inhibit",1,true);
@@ -402,8 +378,5 @@ int main(int argc, char **argv)
     ros::Timer timer = n.createTimer(ros::Duration(0.1),sendHeadingHold);
     
     ros::spin();
-    
-    log_bag.close();
-    
     return 0;
 }
