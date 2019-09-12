@@ -50,7 +50,7 @@ ros::Time desired_heading_time;
 float obstacle_distance;
 float speed_modulation;
 
-std::string helm_mode;
+std::string piloting_mode;
 int current_line = -1;
 
 
@@ -174,7 +174,7 @@ void sendHeadingHold(const ros::TimerEvent event)
 
 void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
 {
-    if (helm_mode == "standby" && inmsg->data != "standby")
+    if (piloting_mode == "standby" && inmsg->data != "standby")
     {
         asv_srvs::VehicleState vs;
         vs.request.desired_state = asv_srvs::VehicleStateRequest::VP_STATE_ACTIVE;
@@ -199,7 +199,7 @@ void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
         asv_inhibit_pub.publish(inhibit);
     }
         
-    helm_mode = inmsg->data;
+    piloting_mode = inmsg->data;
 }
 
 void currentLineCallback(const std_msgs::Int32::ConstPtr& inmsg)
@@ -246,8 +246,8 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
 
     marine_msgs::KeyValue kv;
 
-    kv.key = "helm_mode";
-    kv.value = helm_mode;
+    kv.key = "piloting_mode";
+    kv.value = piloting_mode;
     hb.values.push_back(kv);
 
     kv.key = "js_override";
@@ -349,7 +349,7 @@ int main(int argc, char **argv)
     last_boat_heading = 0.0;
     obstacle_distance = -1.0;
     speed_modulation = 1.0;
-    helm_mode = "standby";
+    piloting_mode = "standby";
     
     ros::init(argc, argv, "cw4_helm");
     ros::NodeHandle n;
@@ -366,7 +366,7 @@ int main(int argc, char **argv)
     ros::Subscriber asv_helm_sub = n.subscribe("/cmd_vel",5,twistCallback);
     ros::Subscriber asv_position_sub = n.subscribe("/sensor/vehicle/position",10,positionCallback);
     ros::Subscriber asv_heading_sub = n.subscribe("/sensor/vehicle/heading",5,headingCallback);
-    ros::Subscriber helm_mode_sub = n.subscribe("/helm_mode",10,helmModeCallback);
+    ros::Subscriber piloting_mode_sub = n.subscribe("/project11/piloting_mode",10,helmModeCallback);
     ros::Subscriber dspeed_sub = n.subscribe("/project11/desired_speed",10,desiredSpeedCallback);
     ros::Subscriber dheading_sub = n.subscribe("/project11/desired_heading",10,desiredHeadingCallback);
     ros::Subscriber obstacle_distance_sub =  n.subscribe("/obstacle_distance",10,obstacleDistanceCallback);
