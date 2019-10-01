@@ -51,8 +51,6 @@ float obstacle_distance;
 float speed_modulation;
 
 std::string piloting_mode;
-int current_line = -1;
-
 
 void twistCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
 {
@@ -202,11 +200,6 @@ void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
     piloting_mode = inmsg->data;
 }
 
-void currentLineCallback(const std_msgs::Int32::ConstPtr& inmsg)
-{
-    current_line = inmsg->data;
-}
-
 std::string boolToString(bool value)
 {
     if(value)
@@ -254,12 +247,6 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
     kv.value = boolToString(joystick_override);
     hb.values.push_back(kv);
     
-    kv.key = "current_line";
-    std::stringstream ss;
-    ss << current_line;
-    kv.value = ss.str();
-    hb.values.push_back(kv);
-
     kv.key = "state";
     switch(inmsg->vehicle_state)
     {
@@ -371,7 +358,6 @@ int main(int argc, char **argv)
     ros::Subscriber dheading_sub = n.subscribe("/project11/desired_heading",10,desiredHeadingCallback);
     ros::Subscriber obstacle_distance_sub =  n.subscribe("/obstacle_distance",10,obstacleDistanceCallback);
     ros::Subscriber vehicle_state_sub =  n.subscribe("/vehicle_status",10,vehicleSatusCallback);
-    ros::Subscriber current_line_sub = n.subscribe("/project11/mission_manager/current_line",10,currentLineCallback);
     ros::Subscriber ais_contact_sub = n.subscribe("/sensor/ais/contact",10,aisContactCallback);
     ros::Subscriber helm_sub = n.subscribe("/helm",10,helmCallback);
 
