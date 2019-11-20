@@ -37,8 +37,8 @@ ros::Publisher contact_pub;
 double heading;
 double rudder;
 double throttle;
-ros::Time last_time;
-bool joystick_override = false;
+ros::Time last_helm_time;
+bool direct_helm = false;
 
 double last_boat_heading;
 
@@ -57,7 +57,7 @@ void twistCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
     throttle = msg->twist.linear.x/2.75;
     rudder = -msg->twist.angular.z;
     
-    last_time = msg->header.stamp;
+    last_helm_time = msg->header.stamp;
 }
 
 void helmCallback(const marine_msgs::Helm::ConstPtr& msg)
@@ -65,7 +65,7 @@ void helmCallback(const marine_msgs::Helm::ConstPtr& msg)
     throttle = msg->throttle;
     rudder = msg->rudder;
     
-    last_time = msg->header.stamp;
+    last_helm_time = msg->header.stamp;
 }
 
 
@@ -125,9 +125,9 @@ void sendHeadingHold(const ros::TimerEvent event)
 {
     asv_msgs::HeadingHold asvMsg;
     bool doDesired = true;
-    if (!last_time.isZero())
+    if (!last_helm_time.isZero())
     {
-        if(event.last_real-last_time>ros::Duration(.5))
+        if(event.last_real-last_helm_time>ros::Duration(.5))
         {
             throttle = 0.0;
             rudder = 0.0;
@@ -145,12 +145,12 @@ void sendHeadingHold(const ros::TimerEvent event)
     asvMsg.heading.heading = heading;
     if(doDesired)
     {
-        joystick_override = false;
+        direct_helm = false;
         asvMsg.thrust.type = asv_msgs::Thrust::THRUST_SPEED;
     }
     else
     {
-        joystick_override = true;
+        direct_helm = true;
         asvMsg.thrust.type = asv_msgs::Thrust::THRUST_THROTTLE;
     }
     //asvMsg.thrust.type = asv_msgs::Thrust::THRUST_SPEED;
@@ -243,8 +243,11 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
     kv.value = piloting_mode;
     hb.values.push_back(kv);
 
-    kv.key = "js_override";
-    kv.value = boolToString(joystick_override);
+    kv.key = "control_mode";
+    if(direct_helm)
+        kv.value = "direct";
+    else
+        kv.value = "desired";
     hb.values.push_back(kv);
     
     kv.key = "state";
