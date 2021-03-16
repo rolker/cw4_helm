@@ -4,9 +4,13 @@
 // Copyright 2017, All rights reserved.
 
 #include "ros/ros.h"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 #include "std_msgs/Bool.h"
 #include "std_msgs/Float32.h"
 #include "std_msgs/String.h"
+#include "std_msgs/Int32.h"
+
 #include "asv_msgs/HeadingHold.h"
 #include "asv_msgs/HeadingStamped.h"
 #include "asv_msgs/BasicPositionStamped.h"
@@ -14,51 +18,33 @@
 #include "asv_srvs/VehicleState.h"
 #include "asv_srvs/PilotControl.h"
 #include "asv_msgs/AISContact.h"
+
 #include "geometry_msgs/TwistStamped.h"
-#include "geographic_msgs/GeoPointStamped.h"
-#include "marine_msgs/NavEulerStamped.h"
 #include "marine_msgs/Heartbeat.h"
 #include "marine_msgs/Contact.h"
 #include "marine_msgs/Helm.h"
-#include <regex>
-#include "boost/date_time/posix_time/posix_time.hpp"
-#include "std_msgs/Int32.h"
+#include "sensor_msgs/NavSatFix.h"
+#include "sensor_msgs/Imu.h"
+
 
 ros::Publisher asv_helm_pub;
 ros::Publisher asv_inhibit_pub;
+
 ros::Publisher position_pub;
-ros::Publisher heading_pub;
-ros::Publisher speed_pub;
-ros::Publisher speed_modulation_pub;
+ros::Publisher orientation_pub;
+ros::Publisher velocity_pub;
+
 ros::Publisher heartbeat_pub;
 ros::Publisher contact_pub;
-
 
 double heading;
 double rudder;
 double throttle;
 ros::Time last_helm_time;
-bool direct_helm = false;
 
 double last_boat_heading;
 
-double desired_speed;
-ros::Time desired_speed_time;
-double desired_heading;
-ros::Time desired_heading_time;
-
-float obstacle_distance;
-float speed_modulation;
-
-std::string piloting_mode;
-
-void twistCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
-{
-    throttle = msg->twist.linear.x/2.75;
-    rudder = -msg->twist.angular.z;
-    
-    last_helm_time = msg->header.stamp;
-}
+bool standby;
 
 void helmCallback(const marine_msgs::Helm::ConstPtr& msg)
 {
@@ -68,72 +54,43 @@ void helmCallback(const marine_msgs::Helm::ConstPtr& msg)
     last_helm_time = msg->header.stamp;
 }
 
-
 void positionCallback(const asv_msgs::BasicPositionStamped::ConstPtr& inmsg)
 {
-    geographic_msgs::GeoPointStamped gps;
-    gps.header = inmsg->header;
-    gps.position.latitude = inmsg->basic_position.position.latitude;
-    gps.position.longitude = inmsg->basic_position.position.longitude;
-    position_pub.publish(gps);
+  sensor_msgs::NavSatFix nsf;
+  nsf.header = inmsg->header;
+  nsf.latitude = inmsg->basic_position.position.latitude;
+  nsf.longitude = inmsg->basic_position.position.longitude;
+  
+  position_pub.publish(nsf);
     
-    geometry_msgs::TwistStamped ts;
-    ts.header = inmsg->header;
-    ts.twist.linear.x = inmsg->basic_position.sog;
-    speed_pub.publish(ts);
+  geometry_msgs::TwistStamped ts;
+  ts.header = inmsg->header;
+  double yaw = M_PI_2-inmsg->basic_position.cog;
+  
+  ts.twist.linear.x = inmsg->basic_position.sog*cos(yaw);
+  velocity_pub.publish(ts);
 }
 
 void headingCallback(const asv_msgs::HeadingStamped::ConstPtr& msg)
 {
-    last_boat_heading = msg->heading.heading;
-    marine_msgs::NavEulerStamped nes;
-    nes.header = msg->header;
-    nes.orientation.heading = msg->heading.heading*180.0/M_PI;
-    heading_pub.publish(nes);
-}
-
-void obstacleDistanceCallback(const std_msgs::Float32::ConstPtr& inmsg)
-{
-    float stop_distance = 25.0;
-    float start_slowing_down_distance = 50.0;
-
-    obstacle_distance = inmsg->data;
-    if(obstacle_distance < 0 || obstacle_distance > start_slowing_down_distance)
-        speed_modulation = 1.0;
-    else if (obstacle_distance < stop_distance)
-        speed_modulation = 0.0;
-    else
-        speed_modulation = (obstacle_distance-stop_distance)/(start_slowing_down_distance-stop_distance);
-    std_msgs::Float32 sm;
-    sm.data = speed_modulation;
-    speed_modulation_pub.publish(sm);
-}
-
-void desiredSpeedCallback(const geometry_msgs::TwistStamped::ConstPtr& inmsg)
-{
-    desired_speed = inmsg->twist.linear.x;
-    desired_speed_time = inmsg->header.stamp;
-}
-
-void desiredHeadingCallback(const marine_msgs::NavEulerStamped::ConstPtr& inmsg)
-{
-    desired_heading = inmsg->orientation.heading;
-    desired_heading_time = inmsg->header.stamp;
+  last_boat_heading = msg->heading.heading;
+  sensor_msgs::Imu imu;
+  imu.header = msg->header;
+  tf2::Quaternion q;
+  q.setRPY(0,0,M_PI_2-last_boat_heading);
+  tf2::convert(q, imu.orientation);
+  imu.angular_velocity_covariance[0] = -1;
+  imu.linear_acceleration_covariance[0] = -1;
+  orientation_pub.publish(imu);
 }
 
 void sendHeadingHold(const ros::TimerEvent event)
 {
     asv_msgs::HeadingHold asvMsg;
-    bool doDesired = true;
-    if (!last_helm_time.isZero())
+    if (!last_helm_time.isZero()&&event.last_real-last_helm_time>ros::Duration(.5))
     {
-        if(event.last_real-last_helm_time>ros::Duration(.5))
-        {
-            throttle = 0.0;
-            rudder = 0.0;
-        }
-        else
-            doDesired = false;
+        throttle = 0.0;
+        rudder = 0.0;
     }
 
     ros::Duration delta_t = event.current_real-event.last_real;
@@ -143,61 +100,40 @@ void sendHeadingHold(const ros::TimerEvent event)
         heading += M_PI*2.0;
     
     asvMsg.heading.heading = heading;
-    if(doDesired)
-    {
-        direct_helm = false;
-        asvMsg.thrust.type = asv_msgs::Thrust::THRUST_SPEED;
-    }
-    else
-    {
-        direct_helm = true;
-        asvMsg.thrust.type = asv_msgs::Thrust::THRUST_THROTTLE;
-    }
-    //asvMsg.thrust.type = asv_msgs::Thrust::THRUST_SPEED;
+    asvMsg.thrust.type = asv_msgs::Thrust::THRUST_THROTTLE;
     asvMsg.thrust.value = throttle*100.0;
     asvMsg.header.stamp = event.current_real;
-    if(doDesired)
-    {
-        if (event.current_real - desired_heading_time < ros::Duration(.5) && event.current_real - desired_speed_time < ros::Duration(.5))
-        {
-            asvMsg.header.stamp = desired_heading_time;
-            asvMsg.heading.heading = desired_heading*M_PI/180.0;
-            asvMsg.thrust.value = desired_speed*speed_modulation;
-        }
-        //else
-          //  std::cerr << "asv_helm: desired values timeout: " << event.current_real << ", " << desired_heading_time << ", " << desired_speed_time << std::endl;
-    }
     asv_helm_pub.publish(asvMsg);
 }
 
-void helmModeCallback(const std_msgs::String::ConstPtr& inmsg)
+void standbyCallback(const std_msgs::Bool::ConstPtr& msg)
 {
-    if (piloting_mode == "standby" && inmsg->data != "standby")
-    {
-        asv_srvs::VehicleState vs;
-        vs.request.desired_state = asv_srvs::VehicleStateRequest::VP_STATE_ACTIVE;
-        ros::service::call("/control/vehicle/state",vs);
-        
-        asv_srvs::PilotControl pc;
-        pc.request.control_request = true;
-        ros::service::call("/control/vehicle/pilot",pc);
-        
-        std_msgs::Bool inhibit;
-        inhibit.data = false;
-        asv_inhibit_pub.publish(inhibit);
-    }
-    if (inmsg->data == "standby")
-    {
-        //asv_srvs::PilotControl pc;
-        //pc.request.control_request = false;
-        //ros::service::call("/control/vehicle/pilot",pc);
+  if(standby && !msg->data)
+  {
+      asv_srvs::VehicleState vs;
+      vs.request.desired_state = asv_srvs::VehicleStateRequest::VP_STATE_ACTIVE;
+      ros::service::call("/control/vehicle/state",vs);
+      
+      asv_srvs::PilotControl pc;
+      pc.request.control_request = true;
+      ros::service::call("/control/vehicle/pilot",pc);
+      
+      std_msgs::Bool inhibit;
+      inhibit.data = false;
+      asv_inhibit_pub.publish(inhibit);
+  }
+  standby = msg->data;
+  if (msg->data)
+  {
+      //asv_srvs::PilotControl pc;
+      //pc.request.control_request = false;
+      //ros::service::call("/control/vehicle/pilot",pc);
 
-        std_msgs::Bool inhibit;
-        inhibit.data = true;
-        asv_inhibit_pub.publish(inhibit);
-    }
+      std_msgs::Bool inhibit;
+      inhibit.data = true;
+      asv_inhibit_pub.publish(inhibit);
+  }
         
-    piloting_mode = inmsg->data;
 }
 
 std::string boolToString(bool value)
@@ -239,15 +175,8 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
 
     marine_msgs::KeyValue kv;
 
-    kv.key = "piloting_mode";
-    kv.value = piloting_mode;
-    hb.values.push_back(kv);
-
-    kv.key = "control_mode";
-    if(direct_helm)
-        kv.value = "direct";
-    else
-        kv.value = "desired";
+    kv.key = "project11_standby";
+    kv.value = boolToString(standby);
     hb.values.push_back(kv);
     
     kv.key = "state";
@@ -337,32 +266,27 @@ int main(int argc, char **argv)
     throttle = 0.0;
     rudder = 0.0;
     last_boat_heading = 0.0;
-    obstacle_distance = -1.0;
-    speed_modulation = 1.0;
-    piloting_mode = "standby";
+    standby = true;
     
     ros::init(argc, argv, "cw4_helm");
     ros::NodeHandle n;
     
     asv_helm_pub = n.advertise<asv_msgs::HeadingHold>("/control/drive/heading_hold",1);
     asv_inhibit_pub = n.advertise<std_msgs::Bool>("/control/drive/inhibit",1,true);
-    heading_pub = n.advertise<marine_msgs::NavEulerStamped>("/heading",1);
-    position_pub = n.advertise<geographic_msgs::GeoPointStamped>("/position",1);
-    speed_pub = n.advertise<geometry_msgs::TwistStamped>("/sog",1);
-    speed_modulation_pub = n.advertise<std_msgs::Float32>("/speed_modulation",1);
-    heartbeat_pub = n.advertise<marine_msgs::Heartbeat>("/heartbeat", 10);
-    contact_pub = n.advertise<marine_msgs::Contact>("/contact",10);
+    
+    orientation_pub = n.advertise<sensor_msgs::Imu>("sensors/oem/orientation",1);
+    position_pub = n.advertise<sensor_msgs::NavSatFix>("sensors/oem/position",1);
+    velocity_pub = n.advertise<geometry_msgs::TwistStamped>("sensors/oem/velocity",1);
+    heartbeat_pub = n.advertise<marine_msgs::Heartbeat>("project11/status/helm", 10);
+    contact_pub = n.advertise<marine_msgs::Contact>("sensors/ais/contact",10);
 
-    ros::Subscriber asv_helm_sub = n.subscribe("/cmd_vel",5,twistCallback);
     ros::Subscriber asv_position_sub = n.subscribe("/sensor/vehicle/position",10,positionCallback);
     ros::Subscriber asv_heading_sub = n.subscribe("/sensor/vehicle/heading",5,headingCallback);
-    ros::Subscriber piloting_mode_sub = n.subscribe("/project11/piloting_mode",10,helmModeCallback);
-    ros::Subscriber dspeed_sub = n.subscribe("/project11/desired_speed",10,desiredSpeedCallback);
-    ros::Subscriber dheading_sub = n.subscribe("/project11/desired_heading",10,desiredHeadingCallback);
-    ros::Subscriber obstacle_distance_sub =  n.subscribe("/obstacle_distance",10,obstacleDistanceCallback);
+    ros::Subscriber stanby_sub = n.subscribe("piloting_mode/standby/active", 5, standbyCallback);
+
     ros::Subscriber vehicle_state_sub =  n.subscribe("/vehicle_status",10,vehicleSatusCallback);
     ros::Subscriber ais_contact_sub = n.subscribe("/sensor/ais/contact",10,aisContactCallback);
-    ros::Subscriber helm_sub = n.subscribe("/helm",10,helmCallback);
+    ros::Subscriber helm_sub = n.subscribe("control/helm",10,helmCallback);
 
     ros::Timer timer = n.createTimer(ros::Duration(0.1),sendHeadingHold);
     
