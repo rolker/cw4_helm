@@ -76,6 +76,8 @@ void headingCallback(const asv_msgs::HeadingStamped::ConstPtr& msg)
   last_boat_heading = msg->heading.heading;
   sensor_msgs::Imu imu;
   imu.header = msg->header;
+  if(imu.header.stamp.sec == 0)
+    imu.header.stamp = ros::Time::now();
   tf2::Quaternion q;
   q.setRPY(0,0,M_PI_2-last_boat_heading);
   tf2::convert(q, imu.orientation);
