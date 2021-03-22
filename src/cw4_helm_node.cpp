@@ -18,6 +18,7 @@
 #include "asv_srvs/VehicleState.h"
 #include "asv_srvs/PilotControl.h"
 #include "asv_msgs/AISContact.h"
+#include "c_worker_4_msgs/EngineFeedback.h"
 
 #include "geometry_msgs/TwistStamped.h"
 #include "marine_msgs/Heartbeat.h"
@@ -25,6 +26,7 @@
 #include "marine_msgs/Helm.h"
 #include "sensor_msgs/NavSatFix.h"
 #include "sensor_msgs/Imu.h"
+#include "diagnostic_msgs/DiagnosticArray.h"
 
 
 ros::Publisher asv_helm_pub;
@@ -36,6 +38,8 @@ ros::Publisher velocity_pub;
 
 ros::Publisher heartbeat_pub;
 ros::Publisher contact_pub;
+
+ros::Publisher diagnostic_pub;
 
 double heading;
 double rudder;
@@ -260,7 +264,62 @@ void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
     heartbeat_pub.publish(hb);
 }
 
+void engineStatusCallback(const c_worker_4_msgs::EngineFeedback::ConstPtr &msg)
+{
+    diagnostic_msgs::DiagnosticArray diag_array;
+    diag_array.header.stamp = msg->header.stamp;
+    diagnostic_msgs::DiagnosticStatus dstatus;
+    dstatus.level = dstatus.OK;
+    dstatus.name = "engine";
+    dstatus.message = "";
 
+
+    const std::string states[] = {"unknown", "isolated", "ignition_on", "glowing", "cranking", "verify_running", "running", "stopping"};
+
+    diagnostic_msgs::KeyValue kv;
+    kv.key = "engine_state";
+
+    if (msg->engine_state >= c_worker_4_msgs::EngineFeedback::ENGINE_STATE_UNKNOWN && msg->engine_state <= c_worker_4_msgs::EngineFeedback::ENGINE_STATE_STOPPING)
+    {
+      kv.value = states[msg->engine_state];
+      if(msg->engine_state == c_worker_4_msgs::EngineFeedback::ENGINE_STATE_UNKNOWN)
+      {
+        if(dstatus.level < dstatus.WARN)
+          dstatus.level = dstatus.WARN;
+        dstatus.message += "unkown state ";
+      }
+
+    }
+    else
+    {
+        kv.value = "invalid: " + std::to_string(msg->engine_state);
+        if(dstatus.level < dstatus.WARN)
+          dstatus.level = dstatus.WARN;
+        dstatus.message += "invalid state ";
+    }
+
+    dstatus.values.push_back(kv);
+
+    const std::string req_states[] = {"isolate", "run"};
+    kv.key = "engine_request";
+
+    if (msg->engine_request >= c_worker_4_msgs::EngineFeedback::ENGINE_STATE_REQ_ISOLATE && msg->engine_request <= c_worker_4_msgs::EngineFeedback::ENGINE_STATE_REQ_RUN)
+        kv.value = req_states[msg->engine_request];
+    else
+    {
+        kv.value = "invalid: " + std::to_string(msg->engine_request);
+        if(dstatus.level < dstatus.WARN)
+          dstatus.level = dstatus.WARN;
+        dstatus.message += "invalid state ";
+    }
+    dstatus.values.push_back(kv);
+
+    diag_array.status.push_back(dstatus);
+
+
+
+    diagnostic_pub.publish(diag_array);
+}
 
 int main(int argc, char **argv)
 {
@@ -281,6 +340,7 @@ int main(int argc, char **argv)
     velocity_pub = n.advertise<geometry_msgs::TwistStamped>("sensors/oem/velocity",1);
     heartbeat_pub = n.advertise<marine_msgs::Heartbeat>("project11/status/helm", 10);
     contact_pub = n.advertise<marine_msgs::Contact>("sensors/ais/contact",10);
+    diagnostic_pub = n.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics",10);
 
     ros::Subscriber asv_position_sub = n.subscribe("/sensor/vehicle/position",10,positionCallback);
     ros::Subscriber asv_heading_sub = n.subscribe("/sensor/vehicle/heading",5,headingCallback);
@@ -289,6 +349,8 @@ int main(int argc, char **argv)
     ros::Subscriber vehicle_state_sub =  n.subscribe("/vehicle_status",10,vehicleSatusCallback);
     ros::Subscriber ais_contact_sub = n.subscribe("/sensor/ais/contact",10,aisContactCallback);
     ros::Subscriber helm_sub = n.subscribe("control/helm",10,helmCallback);
+
+    ros::Subscriber engine_status_sub = n.subscribe("sensor/vehicle/engine",10,engineStatusCallback);
 
     ros::Timer timer = n.createTimer(ros::Duration(0.1),sendHeadingHold);
     
