@@ -268,11 +268,11 @@ void engineStatusCallback(const c_worker_4_msgs::EngineFeedback::ConstPtr &msg)
 {
     diagnostic_msgs::DiagnosticArray diag_array;
     diag_array.header.stamp = msg->header.stamp;
+
     diagnostic_msgs::DiagnosticStatus dstatus;
     dstatus.level = dstatus.OK;
-    dstatus.name = "engine";
+    dstatus.name = "cw4/engine";
     dstatus.message = "";
-
 
     const std::string states[] = {"unknown", "isolated", "ignition_on", "glowing", "cranking", "verify_running", "running", "stopping"};
 
@@ -314,9 +314,43 @@ void engineStatusCallback(const c_worker_4_msgs::EngineFeedback::ConstPtr &msg)
     }
     dstatus.values.push_back(kv);
 
+    kv.key = "altenator_current";
+    kv.value = std::to_string(msg->alternator_current)+" (amps)";
+    dstatus.values.push_back(kv);
+
+    kv.key = "coolant_temperature";
+    kv.value = std::to_string(msg->coolant_temperature)+" (Celsius)";
+    dstatus.values.push_back(kv);
+
+    kv.key = "oil_pressure";
+    kv.value = std::to_string(msg->oil_pressure)+" (Pascals)";
+    dstatus.values.push_back(kv);
+
+    kv.key = "engine_speed";
+    kv.value = std::to_string(msg->engine_speed)+" (rpm)";
+    dstatus.values.push_back(kv);
+
+    kv.key = "hours";
+    kv.value = std::to_string(msg->hours);
+    dstatus.values.push_back(kv);
+
+    kv.key = "starter_voltage";
+    kv.value = std::to_string(msg->starter_voltage)+" (Volts)";
+    dstatus.values.push_back(kv);
+
+    kv.key = "primary_fuel_level";
+    kv.value = std::to_string(msg->primary_fuel_level)+"%";
+    dstatus.values.push_back(kv);
+
+    kv.key = "secondary_fuel_level";
+    kv.value = std::to_string(msg->secondary_fuel_level)+"%";
+    dstatus.values.push_back(kv);
+
+    kv.key = "exhaust_temperature";
+    kv.value = std::to_string(msg->exhaust_temperature)+" (Celsius)";
+    dstatus.values.push_back(kv);
+
     diag_array.status.push_back(dstatus);
-
-
 
     diagnostic_pub.publish(diag_array);
 }
@@ -350,7 +384,7 @@ int main(int argc, char **argv)
     ros::Subscriber ais_contact_sub = n.subscribe("/sensor/ais/contact",10,aisContactCallback);
     ros::Subscriber helm_sub = n.subscribe("control/helm",10,helmCallback);
 
-    ros::Subscriber engine_status_sub = n.subscribe("sensor/vehicle/engine",10,engineStatusCallback);
+    ros::Subscriber engine_status_sub = n.subscribe("/sensor/vehicle/engine",10,engineStatusCallback);
 
     ros::Timer timer = n.createTimer(ros::Duration(0.1),sendHeadingHold);
     
