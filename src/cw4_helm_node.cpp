@@ -64,6 +64,7 @@ void positionCallback(const asv_msgs::BasicPositionStamped::ConstPtr& inmsg)
   nsf.header = inmsg->header;
   nsf.latitude = inmsg->basic_position.position.latitude;
   nsf.longitude = inmsg->basic_position.position.longitude;
+  nsf.altitude = std::numeric_limits<double>::quiet_NaN();
   
   position_pub.publish(nsf);
     
