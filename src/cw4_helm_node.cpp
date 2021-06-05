@@ -102,7 +102,7 @@ void sendVirtualDrive(const ros::TimerEvent event)
         rudder = 0.0;
     }
 
-    driveMessage.steerage = rudder;
+    driveMessage.steerage = rudder*100.0;
     driveMessage.thrust.type = asv_msgs::Thrust::THRUST_THROTTLE;
     driveMessage.thrust.value = throttle*100.0;
     driveMessage.header.stamp = event.current_real;
