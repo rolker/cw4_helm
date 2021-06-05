@@ -14,7 +14,8 @@
 #include "asv_msgs/HeadingHold.h"
 #include "asv_msgs/HeadingStamped.h"
 #include "asv_msgs/BasicPositionStamped.h"
-#include "asv_msgs//VehicleStatus.h"
+#include "asv_msgs/VehicleStatus.h"
+#include "asv_msgs/VirtualDrive.h"
 #include "asv_srvs/VehicleState.h"
 #include "asv_srvs/PilotControl.h"
 #include "asv_msgs/AISContact.h"
@@ -31,6 +32,7 @@
 
 ros::Publisher asv_helm_pub;
 ros::Publisher asv_inhibit_pub;
+ros::Publisher asv_virtual_drive_pub;
 
 ros::Publisher position_pub;
 ros::Publisher orientation_pub;
@@ -89,6 +91,24 @@ void headingCallback(const asv_msgs::HeadingStamped::ConstPtr& msg)
   imu.angular_velocity_covariance[0] = -1;
   imu.linear_acceleration_covariance[0] = -1;
   orientation_pub.publish(imu);
+}
+
+void sendVirtualDrive(const ros::TimerEvent event)
+{
+    asv_msgs::VirtualDrive driveMessage;
+    if (!last_helm_time.isZero()&&event.last_real-last_helm_time>ros::Duration(.5))
+    {
+        throttle = 0.0;
+        rudder = 0.0;
+    }
+
+    driveMessage.steerage = rudder;
+    driveMessage.thrust.type = asv_msgs::Thrust::THRUST_THROTTLE;
+    driveMessage.thrust.value = throttle*100.0;
+    driveMessage.header.stamp = event.current_real;
+
+    asv_virtual_drive_pub.publish(driveMessage);
+
 }
 
 void sendHeadingHold(const ros::TimerEvent event)
@@ -369,6 +389,7 @@ int main(int argc, char **argv)
     
     asv_helm_pub = n.advertise<asv_msgs::HeadingHold>("/control/drive/heading_hold",1);
     asv_inhibit_pub = n.advertise<std_msgs::Bool>("/control/drive/inhibit",1,true);
+    asv_virtual_drive_pub = n.advertise<asv_msgs::VirtualDrive>("/control/drive/virtual",1);
     
     orientation_pub = n.advertise<sensor_msgs::Imu>("sensors/oem/orientation",1);
     position_pub = n.advertise<sensor_msgs::NavSatFix>("sensors/oem/position",1);
@@ -387,8 +408,9 @@ int main(int argc, char **argv)
 
     ros::Subscriber engine_status_sub = n.subscribe("/sensor/vehicle/engine",10,engineStatusCallback);
 
-    ros::Timer timer = n.createTimer(ros::Duration(0.1),sendHeadingHold);
-    
+    //ros::Timer timer = n.createTimer(ros::Duration(0.1),sendHeadingHold);
+    ros::Timer timer = n.createTimer(ros::Duration(0.1),sendVirtualDrive);
+
     ros::spin();
     return 0;
 }
