@@ -152,6 +152,9 @@ void standbyCallback(const std_msgs::Bool::ConstPtr& msg)
   standby = msg->data;
   if (msg->data)
   {
+      asv_srvs::VehicleState vs;
+      vs.request.desired_state = asv_srvs::VehicleStateRequest::VP_STATE_PAUSE;
+      ros::service::call("/control/vehicle/state",vs);
       //asv_srvs::PilotControl pc;
       //pc.request.control_request = false;
       //ros::service::call("/control/vehicle/pilot",pc);
@@ -198,6 +201,9 @@ void aisContactCallback(const asv_msgs::AISContact::ConstPtr& inmsg)
 void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
 {
     marine_msgs::Heartbeat hb;
+    
+    // hb.header.stamp =  inmsg->header.stamp;
+    // timestamp from message seems unreliable
     hb.header.stamp = ros::Time::now();
 
     marine_msgs::KeyValue kv;
@@ -400,11 +406,11 @@ int main(int argc, char **argv)
 
     ros::Subscriber asv_position_sub = n.subscribe("/sensor/vehicle/position",10,positionCallback);
     ros::Subscriber asv_heading_sub = n.subscribe("/sensor/vehicle/heading",5,headingCallback);
-    ros::Subscriber stanby_sub = n.subscribe("piloting_mode/standby/active", 5, standbyCallback);
+    ros::Subscriber stanby_sub = n.subscribe("project11/piloting_mode/standby/active", 5, standbyCallback);
 
     ros::Subscriber vehicle_state_sub =  n.subscribe("/vehicle_status",10,vehicleSatusCallback);
     ros::Subscriber ais_contact_sub = n.subscribe("/sensor/ais/contact",10,aisContactCallback);
-    ros::Subscriber helm_sub = n.subscribe("control/helm",10,helmCallback);
+    ros::Subscriber helm_sub = n.subscribe("project11/control/helm",10,helmCallback);
 
     ros::Subscriber engine_status_sub = n.subscribe("/sensor/vehicle/engine",10,engineStatusCallback);
 
