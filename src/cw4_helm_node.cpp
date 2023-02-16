@@ -22,9 +22,9 @@
 #include "c_worker_4_msgs/EngineFeedback.h"
 
 #include "geometry_msgs/TwistStamped.h"
-#include "marine_msgs/Heartbeat.h"
-#include "marine_msgs/Contact.h"
-#include "marine_msgs/Helm.h"
+#include "project11_msgs/Heartbeat.h"
+#include "project11_msgs/Contact.h"
+#include "project11_msgs/Helm.h"
 #include "sensor_msgs/NavSatFix.h"
 #include "sensor_msgs/Imu.h"
 #include "diagnostic_msgs/DiagnosticArray.h"
@@ -52,7 +52,7 @@ double last_boat_heading;
 
 bool standby;
 
-void helmCallback(const marine_msgs::Helm::ConstPtr& msg)
+void helmCallback(const project11_msgs::Helm::ConstPtr& msg)
 {
     throttle = msg->throttle;
     rudder = msg->rudder;
@@ -175,8 +175,8 @@ std::string boolToString(bool value)
 
 void aisContactCallback(const asv_msgs::AISContact::ConstPtr& inmsg)
 {
-    marine_msgs::Contact c;
-    c.contact_source = marine_msgs::Contact::CONTACT_SOURCE_AIS;
+    project11_msgs::Contact c;
+    c.contact_source = project11_msgs::Contact::CONTACT_SOURCE_AIS;
     
     c.header = inmsg->header;
     c.mmsi = inmsg->mmsi;
@@ -200,13 +200,13 @@ void aisContactCallback(const asv_msgs::AISContact::ConstPtr& inmsg)
 
 void vehicleSatusCallback(const asv_msgs::VehicleStatus::ConstPtr& inmsg)
 {
-    marine_msgs::Heartbeat hb;
+    project11_msgs::Heartbeat hb;
     
     // hb.header.stamp =  inmsg->header.stamp;
     // timestamp from message seems unreliable
     hb.header.stamp = ros::Time::now();
 
-    marine_msgs::KeyValue kv;
+    project11_msgs::KeyValue kv;
 
     kv.key = "project11_standby";
     kv.value = boolToString(standby);
@@ -400,8 +400,8 @@ int main(int argc, char **argv)
     orientation_pub = n.advertise<sensor_msgs::Imu>("sensors/oem/orientation",1);
     position_pub = n.advertise<sensor_msgs::NavSatFix>("sensors/oem/position",1);
     velocity_pub = n.advertise<geometry_msgs::TwistStamped>("sensors/oem/velocity",1);
-    heartbeat_pub = n.advertise<marine_msgs::Heartbeat>("project11/status/helm", 10);
-    contact_pub = n.advertise<marine_msgs::Contact>("sensors/ais/contact",10);
+    heartbeat_pub = n.advertise<project11_msgs::Heartbeat>("project11/status/helm", 10);
+    contact_pub = n.advertise<project11_msgs::Contact>("sensors/ais/contact",10);
     diagnostic_pub = n.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics",10);
 
     ros::Subscriber asv_position_sub = n.subscribe("/sensor/vehicle/position",10,positionCallback);
