@@ -22,9 +22,11 @@
 #include "c_worker_4_msgs/EngineFeedback.h"
 
 #include "geometry_msgs/TwistStamped.h"
+#include "nav_msgs/Odometry.h"
 #include "project11_msgs/Heartbeat.h"
 #include "project11_msgs/Contact.h"
 #include "project11_msgs/Helm.h"
+#include "project11/pid.h"
 #include "sensor_msgs/NavSatFix.h"
 #include "sensor_msgs/Imu.h"
 #include "diagnostic_msgs/DiagnosticArray.h"
@@ -52,12 +54,38 @@ double last_boat_heading;
 
 bool standby;
 
+nav_msgs::Odometry latest_odometry;
+project11::PID pid;
+double max_speed = 2.75;
+double max_yaw_speed = 0.5;
+
 void helmCallback(const project11_msgs::Helm::ConstPtr& msg)
 {
     throttle = msg->throttle;
     rudder = msg->rudder;
     
     last_helm_time = msg->header.stamp;
+}
+
+void twistCallback(const geometry_msgs::TwistStamped::ConstPtr& msg)
+{
+    throttle = msg->twist.linear.x/max_speed;
+    if(msg->header.stamp - latest_odometry.header.stamp < ros::Duration(1.0))
+    {
+        pid.setPoint(msg->twist.linear.x);
+        throttle = pid.update(latest_odometry.twist.twist.linear.x, latest_odometry.header.stamp);
+    }
+    else
+        ROS_WARN_STREAM_THROTTLE(2.0,"No recent odometry for use with throttle PID");
+    throttle = std::max(-1.0, std::min(1.0, throttle));
+    rudder = -msg->twist.angular.z/max_yaw_speed;
+    rudder = std::max(-1.0, std::min(1.0, rudder));
+    last_helm_time = msg->header.stamp;
+}
+
+void odometryCallback(const nav_msgs::Odometry::ConstPtr &msg)
+{
+  latest_odometry = *msg;
 }
 
 void positionCallback(const asv_msgs::BasicPositionStamped::ConstPtr& inmsg)
@@ -393,6 +421,8 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "cw4_helm");
     ros::NodeHandle n;
     
+    pid.configure(ros::NodeHandle("~/pid"));
+
     asv_helm_pub = n.advertise<asv_msgs::HeadingHold>("/control/drive/heading_hold",1);
     asv_inhibit_pub = n.advertise<std_msgs::Bool>("/control/drive/inhibit",1,true);
     asv_virtual_drive_pub = n.advertise<asv_msgs::VirtualDrive>("/control/drive/virtual",1);
@@ -411,6 +441,9 @@ int main(int argc, char **argv)
     ros::Subscriber vehicle_state_sub =  n.subscribe("/vehicle_status",10,vehicleSatusCallback);
     ros::Subscriber ais_contact_sub = n.subscribe("/sensor/ais/contact",10,aisContactCallback);
     ros::Subscriber helm_sub = n.subscribe("project11/control/helm",10,helmCallback);
+    ros::Subscriber twist_sub = n.subscribe("project11/control/cmd_vel",10,twistCallback);
+
+    ros::Subscriber odom_sub = n.subscribe("project11/odom", 5, odometryCallback);
 
     ros::Subscriber engine_status_sub = n.subscribe("/sensor/vehicle/engine",10,engineStatusCallback);
 

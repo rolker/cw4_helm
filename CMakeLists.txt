@@ -8,15 +8,16 @@ find_package(catkin REQUIRED COMPONENTS
   asv_srvs
   geometry_msgs
   geographic_msgs
+  nav_msgs
+  project11
   project11_msgs
   roscpp
-  project11
   sensor_msgs
   project11_msgs
 )
 
 catkin_package(
-  CATKIN_DEPENDS asv_msgs asv_srvs geometry_msgs roscpp project11 sensor_msgs project11_msgs
+  CATKIN_DEPENDS asv_msgs asv_srvs geometry_msgs roscpp project11 nav_msgs sensor_msgs project11_msgs
 )
 
 include_directories(
