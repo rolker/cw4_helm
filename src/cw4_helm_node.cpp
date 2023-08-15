@@ -341,7 +341,7 @@ void engineStatusCallback(const c_worker_4_msgs::EngineFeedback::ConstPtr &msg)
       {
         if(dstatus.level < dstatus.WARN)
           dstatus.level = dstatus.WARN;
-        dstatus.message += "unkown state ";
+        dstatus.message += "unknown state ";
       }
 
     }
