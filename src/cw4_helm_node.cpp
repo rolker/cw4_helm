@@ -443,7 +443,7 @@ int main(int argc, char **argv)
     ros::Subscriber helm_sub = n.subscribe("project11/control/helm",10,helmCallback);
     ros::Subscriber twist_sub = n.subscribe("project11/control/cmd_vel",10,twistCallback);
 
-    ros::Subscriber odom_sub = n.subscribe("project11/odom", 5, odometryCallback);
+    ros::Subscriber odom_sub = n.subscribe("odom", 5, odometryCallback);
 
     ros::Subscriber engine_status_sub = n.subscribe("/sensor/vehicle/engine",10,engineStatusCallback);
 
