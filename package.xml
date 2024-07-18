@@ -11,6 +11,7 @@
   <buildtool_depend>catkin</buildtool_depend>
   <depend>asv_msgs</depend>
   <depend>asv_srvs</depend>
+  <depend>c_worker_4_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>geographic_msgs</depend>
   <depend>nav_msgs</depend>

@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(cw4_helm)
 
-add_compile_options(-std=c++11)
+set(CMAKE_CXX_STANDARD 14)
 
 find_package(catkin REQUIRED COMPONENTS
   asv_msgs
   asv_srvs
+  c_worker_4_msgs
   geometry_msgs
   geographic_msgs
   nav_msgs
@@ -17,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_package(
-  CATKIN_DEPENDS asv_msgs asv_srvs geometry_msgs roscpp project11 nav_msgs sensor_msgs project11_msgs
+  CATKIN_DEPENDS asv_msgs asv_srvs c_worker_4_msgs geometry_msgs roscpp project11 nav_msgs sensor_msgs project11_msgs
 )
 
 include_directories(
